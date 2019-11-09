@@ -45,7 +45,7 @@ function locationHandler(request,response) {
         let SQL = `INSERT INTO location_table (latitude, longitude, place_id) VALUES ($1, $2, $3) RETURNING *`;
         let safeValues = [latitude, longitude, place_id];
         client.query(SQL, safeValues).then( results => {
-          response.status(200).json(results);
+          response.status(200).send(results);
         }).catch( err => console.error(err));
         locations[url] = location;
         response.send(location);
