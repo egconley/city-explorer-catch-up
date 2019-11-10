@@ -19,7 +19,7 @@ client.on('err', err => { throw err; });
 // Route Definitions
 app.get('/location', locationHandler);
 app.get('/weather', weatherHandler);
-// app.get('/location_table', tableHandler);
+app.get('/location_table', tableHandler);
 app.get('/yelp', yelpHandler);
 app.get('/movies', movieHandler);
 app.use('*', notFoundHandler);
@@ -28,9 +28,9 @@ app.use(errorHandler);
 ///LOCATIONS
 let locations = {};
 
-function locationHandler(request,response) {
+function locationHandler(request, response) {
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
-  if ( locations[url] ) {
+  if (locations[url]) {
     response.send(locations[url]);
   }
   else {
@@ -40,16 +40,16 @@ function locationHandler(request,response) {
         const location = new Location(request.query.data, geoData);
         let latitude = location.latitude;
         let longitude = location.longitude;
-        // let place_id = location.place_id;
+        let place_id = location.place_id;
         let SQL = `INSERT INTO location_table (latitude, longitude, place_id) VALUES ($1, $2, $3) RETURNING *`;
-        let safeValues = [latitude, longitude/*, place_id */];
-        client.query(SQL, safeValues).then( results => {
+        let safeValues = [latitude, longitude, place_id];
+        client.query(SQL, safeValues).then(results => {
           response.status(200).send(results);
-        }).catch( err => console.error(err));
+        }).catch(err => console.error(err));
         locations[url] = location;
         response.send(location);
       })
-      .catch( () => {
+      .catch(() => {
         errorHandler(`So sorry, something went wrong. url: ${url}`, request, response);
       });
   }
@@ -64,18 +64,18 @@ function Location(query, geoData) {
 }
 
 ///WEATHER
-function weatherHandler(request,response) {
+function weatherHandler(request, response) {
 
   const url = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${request.query.data.latitude},${request.query.data.longitude}`;
 
   superagent.get(url)
-    .then( data => {
+    .then(data => {
       const weatherSummaries = data.body.daily.data.map(day => {
         return new Weather(day);
       });
       response.status(200).json(weatherSummaries);
     })
-    .catch( () => {
+    .catch(() => {
       errorHandler(`So sorry, something went wrong. url: ${url}`, request, response);
     });
 }
@@ -87,19 +87,19 @@ function Weather(day) {
 ///
 
 ///YELP
-function yelpHandler(request,response) {
+function yelpHandler(request, response) {
 
   const url = `https://api.yelp.com/v3/businesses/search?latitude=${request.query.data.latitude}&longitude=${request.query.data.longitude}`;
 
   superagent.get(url)
     .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
-    .then( data => {
+    .then(data => {
       const yelpReviews = data.body.businesses.map(business => {
         return new Yelp(business);
       });
       response.status(200).json(yelpReviews);
     })
-    .catch( () => {
+    .catch(() => {
       errorHandler(`So sorry, something went wrong. url: ${url}`, request, response);
     });
 }
@@ -113,33 +113,37 @@ function Yelp(business) {
 }
 ///
 
-// ///MOVIES
-// function movieHandler(request,response) {
-
-//   const url = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&language=en-US&query=${request.query.data}&page=1&include_adult=false`;
-
-//   superagent.get(url)
-//     .then( data => {
-//       const cityMovies = data.body.results.map(movie => {
-//         return new Movie(movie);
-//       });
-//       response.status(200).json(cityMovies);
-//     })
-//     .catch( () => {
-//       errorHandler(`So sorry, something went wrong. url: ${url}`, request, response);
-//     });
-// }
-
-///MOVIES FROM JSON
+// MOVIES
 const movieSummaries = [];
 
-function movieHandler(req, res) {
-  const movieData = require('./movies.json');
-  movieData.results.map(movie => {
-    return new Movie(movie);
-  });
-  res.status(200).json(movieSummaries);
+function movieHandler(request, response) {
+
+  const url = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&language=en-US&query=${request.query.data.search_query}&page=1&include_adult=false`;
+
+  console.log(url);
+  //query=[object Object] when you don't include .search_query
+
+  superagent.get(url)
+    .then(data => {
+      data.body.results.map(movie => {
+        return new Movie(movie);
+      });
+      response.status(200).json(movieSummaries);
+    })
+    .catch(() => {
+      errorHandler(`So sorry, something went wrong. url: ${url}`, request, response);
+    });
 }
+
+///MOVIES FROM JSON
+
+// function movieHandler(req, res) {
+//   const movieData = require('./movies.json');
+//   movieData.results.map(movie => {
+//     return new Movie(movie);
+//   });
+//   res.status(200).json(movieSummaries);
+// }
 
 function Movie(movie) {
   this.title = movie.title; //
@@ -155,21 +159,21 @@ function Movie(movie) {
 ///
 
 ///STORAGE
-// function tableHandler(req, res) {
-//   let SQL = `SELECT * FROM location_table`;
-//   client.query(SQL)
-//     .then( results => {
-//       res.status(200).json(results.rows);
-//     })
-//     .catch( err => console.err(err));
-// }
-///
+function tableHandler(req, res) {
+  let SQL = `SELECT * FROM location_table`;
+  client.query(SQL)
+    .then(results => {
+      res.status(200).json(results.rows);
+    })
+    .catch(err => console.err(err));
+}
 
-function notFoundHandler(request,response) {
+
+function notFoundHandler(request, response) {
   response.status(404).send('huh?');
 }
 
-function errorHandler(error,request,response) {
+function errorHandler(error, request, response) {
   response.status(500).send(error);
 }
 
@@ -182,3 +186,7 @@ client.connect()
   .catch(err => {
     throw `PG startup error ${err.message}`
   })
+
+
+//ah-Ha moments:
+// console.log(url) showed that the query entered into the url was [object Object], googled and found that you can't pass objects into query strings...added .search_query to request.query.data and that worked.  Was trying that with Terrell and Ran on Friday night and it wasn't working.  It was important to make it work with sample json data from postman first to make sure the other parts of my code were working to THEN get to that error and see that I needed to add .search_query.
