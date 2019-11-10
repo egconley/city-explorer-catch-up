@@ -1,6 +1,5 @@
 'use strict';
 // 3rd party dependencies
-require('dotenv').config();
 const express = require('express');
 const pg = require('pg');
 const superagent = require('superagent');
@@ -8,6 +7,7 @@ const cors = require('cors');
 
 // application constants
 const app = express();
+require('dotenv').config();
 const PORT = process.env.PORT;
 app.use(cors());
 
@@ -22,6 +22,7 @@ app.get('/weather', weatherHandler);
 app.get('/location_table', tableHandler);
 app.get('/yelp', yelpHandler);
 app.get('/movies', movieHandler);
+app.get('/trails', trailsHandler);
 app.use('*', notFoundHandler);
 app.use(errorHandler);
 
@@ -60,8 +61,9 @@ function Location(query, geoData) {
   this.formatted_query = geoData.results[0].formatted_address;
   this.latitude = geoData.results[0].geometry.location.lat;
   this.longitude = geoData.results[0].geometry.location.lng;
-  // this.place_id = geoData.results[0].place_id;
+  this.place_id = geoData.results[0].place_id;
 }
+///
 
 ///WEATHER
 function weatherHandler(request, response) {
@@ -92,7 +94,7 @@ function yelpHandler(request, response) {
   const url = `https://api.yelp.com/v3/businesses/search?latitude=${request.query.data.latitude}&longitude=${request.query.data.longitude}`;
 
   superagent.get(url)
-    .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
+    .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`) //Ran taught me this
     .then(data => {
       const yelpReviews = data.body.businesses.map(business => {
         return new Yelp(business);
@@ -158,6 +160,33 @@ function Movie(movie) {
 }
 ///
 
+/// TRAILS - from Amy
+function trailsHandler(request, response) {
+  const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.TRAIL_API_KEY}`;
+  superagent.get(url)
+    .then(data => {
+      const trailData = data.body.trails.map(location => {
+        return new Trail(location);
+      });
+      response.status(200).json(trailData);
+    })
+    .catch(error => errorHandler(error, request, response));
+}
+
+function Trail(location) {
+  this.name = location.name;
+  this.location = location.location;
+  this.length = location.length;
+  this.stars = location.stars;
+  this.star_votes = location.starVotes;
+  this.summary = location.summary;
+  this.trail_url = location.url;
+  this.conditions = location.conditionStatus;
+  this.condition_date = location.conditionDate;
+  this.condition_time = location.conditionTime;
+}
+///
+
 ///STORAGE
 function tableHandler(req, res) {
   let SQL = `SELECT * FROM location_table`;
@@ -190,3 +219,4 @@ client.connect()
 
 //ah-Ha moments:
 // console.log(url) showed that the query entered into the url was [object Object], googled and found that you can't pass objects into query strings...added .search_query to request.query.data and that worked.  Was trying that with Terrell and Ran on Friday night and it wasn't working.  It was important to make it work with sample json data from postman first to make sure the other parts of my code were working to THEN get to that error and see that I needed to add .search_query.
+// The route definition does not have to match the url.
