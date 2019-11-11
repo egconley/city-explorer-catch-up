@@ -19,7 +19,8 @@ client.on('err', err => { throw err; });
 // Route Definitions
 app.get('/location', locationHandler);
 app.get('/weather', weatherHandler);
-app.get('/location_table', tableHandler);
+app.get('/location_table', locationTableHandler);
+// app.get('/weather_table', weatherTableHandler);
 app.get('/yelp', yelpHandler);
 app.get('/movies', movieHandler);
 app.get('/trails', trailsHandler);
@@ -28,6 +29,8 @@ app.use(errorHandler);
 
 ///LOCATIONS
 let locations = {};
+let global_place_id;
+let global_search_query;
 
 function locationHandler(request, response) {
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
@@ -42,8 +45,9 @@ function locationHandler(request, response) {
         let latitude = location.latitude;
         let longitude = location.longitude;
         let place_id = location.place_id;
-        let SQL = `INSERT INTO location_table (latitude, longitude, place_id) VALUES ($1, $2, $3) RETURNING *`;
-        let safeValues = [latitude, longitude, place_id];
+        let search_query = location.search_query;
+        let SQL = `INSERT INTO location_table (search_query, latitude, longitude, place_id) VALUES ($1, $2, $3, $4) RETURNING *`;
+        let safeValues = [search_query, latitude, longitude, place_id];
         client.query(SQL, safeValues).then(results => {
           response.status(200).send(results);
         }).catch(err => console.error(err));
@@ -62,6 +66,8 @@ function Location(query, geoData) {
   this.latitude = geoData.results[0].geometry.location.lat;
   this.longitude = geoData.results[0].geometry.location.lng;
   this.place_id = geoData.results[0].place_id;
+  global_place_id = geoData.results[0].place_id;
+  global_search_query = query;
 }
 ///
 
@@ -74,6 +80,14 @@ function weatherHandler(request, response) {
     .then(data => {
       const weatherSummaries = data.body.daily.data.map(day => {
         return new Weather(day);
+        // const weather = new Weather(day);
+        // let forecast = weather.forecast;
+        // let time_var = weather.time;
+        // let SQL = `INSERT INTO weather_table (global_search_query, global_place_id, forecast, time_var) VALUES ($1, $2, $3, $4) RETURNING *`;
+        // let safeValues = [global_search_query, global_place_id, forecast, time_var];
+        // client.query(SQL, safeValues).then(results => {
+        //   response.status(200).send(results);
+        // }).catch(err => console.error(err));
       });
       response.status(200).json(weatherSummaries);
     })
@@ -156,7 +170,7 @@ function Movie(movie) {
   this.popularity = movie.popularity; //
   this.released_on = movie.release_date; //
   movieSummaries.push(this);
-  console.log(this);
+  // console.log(this);
 }
 ///
 
@@ -188,7 +202,7 @@ function Trail(location) {
 ///
 
 ///STORAGE
-function tableHandler(req, res) {
+function locationTableHandler(req, res) {
   let SQL = `SELECT * FROM location_table`;
   client.query(SQL)
     .then(results => {
@@ -197,6 +211,15 @@ function tableHandler(req, res) {
     .catch(err => console.err(err));
 }
 
+// function weatherTableHandler(req, res) {
+//   let SQL = `SELECT * FROM weather_table`;
+//   client.query(SQL)
+//     .then(results => {
+//       res.status(200).json(results.rows);
+//     })
+//     .catch(err => console.err(err));
+// }
+///
 
 function notFoundHandler(request, response) {
   response.status(404).send('huh?');
